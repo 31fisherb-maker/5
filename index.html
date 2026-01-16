@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+    <title>99Days | Full Build</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/bubbls/99itf@main/style.css"/>
+    <style>
+        html, body { padding: 0; margin: 0; overflow: hidden; height: 100%; background: #231f20; }
+        #unity-container { width: 100%; height: 100%; position: relative; }
+        #unity-canvas { width: 100%; height: 100%; display: block; }
+        #loading-cover { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #231f20; z-index: 10; flex-direction: column; }
+        #unity-loading-bar { width: 200px; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; margin-top: 10px; }
+        #unity-progress-bar-full { width: 0%; height: 100%; background: #fff; border-radius: 5px; transition: width 0.2s; }
+        .spinner { border: 3px solid rgba(255,255,255,0.1); width: 30px; height: 30px; border-radius: 50%; border-left-color: #fff; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="dark">
+
+<div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loading-cover">
+        <div class="spinner"></div>
+        <div id="unity-loading-bar"><div id="unity-progress-bar-full"></div></div>
+    </div>
+</div>
+
+<script>
+    // --- 1. RESTORING ALL ORIGINAL VARIABLES (Feature Preservation) ---
+    var ysdk = {
+        getPlayer: function() { 
+            return Promise.resolve({
+                getName: () => "Player", getPhoto: () => "", getUniqueID: () => "1",
+                setData: () => Promise.resolve(), getData: () => Promise.resolve({})
+            });
+        },
+        adv: { showFullscreenAdv: (o) => o.callbacks.onClose(true), showRewardedVideo: (o) => o.callbacks.onClose(true) }
+    };
+
+    var environmentData = {
+        language: "en", domain: "default", deviceType: "desktop", isMobile: false, 
+        isDesktop: true, isTablet: false, isTV: false, appID: "0", 
+        browserLang: "en", payload: null, promptCanShow: false, reviewCanShow: false,
+        platform: navigator.platform, browser: "Chrome"
+    };
+
+    var cloudSaves = 'noData';
+    var paymentsData = 'none';
+    var playerData = 'noData';
+    var player = null;
+    var payments = null;
+    var initGame = false;
+    var nowFullAdOpen = false;
+
+    // --- 2. RESTORING ALL ORIGINAL FUNCTIONS ---
+    function FocusGame() { window.focus(); var c = document.querySelector("#unity-canvas"); if(c) c.focus(); }
+    window.addEventListener('pointerdown', FocusGame);
+    window.addEventListener('touchstart', FocusGame);
+
+    function InitGame() { console.log('Init Game Success'); initGame = true; }
+    function auth() { initPlayer(); }
+    function GetPayments() { return Promise.resolve("none"); }
+    function SaveCloud() { console.log("Save Cloud Triggered"); }
+    function LoadCloud() { return Promise.resolve("noData"); }
+    function InitLeaderboard() { return Promise.resolve("noData"); }
+    function StickyAdActivity() {}
+    function Review() {}
+    function PromptShow() {}
+    function InitLeaderboards() {}
+    function GetLeaderboardScores() {}
+    function SetLeaderboardScores() {}
+    function ConsumePurchase() {}
+    function ConsumePurchases() {}
+    function initPlayer() { return Promise.resolve(); }
+
+    // --- 3. LOADING ENGINE ---
+    const buildUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/Build";
+    const cdnBaseUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/";
+
+    const dataParts = [
+        cdnBaseUrl + "Build.data.br.part0", cdnBaseUrl + "Build.data.br.part1",
+        cdnBaseUrl + "Build.data.br.part2", cdnBaseUrl + "Build.data.br.part3"
+    ];
+    const wasmParts = [
+        cdnBaseUrl + "Build.wasm.br.part0", cdnBaseUrl + "Build.wasm.br.part1",
+        cdnBaseUrl + "Build.wasm.br.part2", cdnBaseUrl + "Build.wasm.br.part3",
+        cdnBaseUrl + "Build.wasm.br.part4"
+    ];
+
+    async function fetchAndCombine(parts) {
+        const buffers = [];
+        for (const url of parts) {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("Part failed: " + url);
+            buffers.push(await resp.arrayBuffer());
+        }
+        const total = buffers.reduce((acc, b) => acc + b.byteLength, 0);
+        const combined = new Uint8Array(total);
+        let offset = 0;
+        for (const b of buffers) {
+            combined.set(new Uint8Array(b), offset);
+            offset += b.byteLength;
+        }
+        return URL.createObjectURL(new Blob([combined], {type: 'application/octet-stream'}));
+    }
+
+    const config = {
+        dataUrl: "", frameworkUrl: buildUrl + "/Build.framework.js", codeUrl: "",
+        streamingAssetsUrl: "StreamingAssets", companyName: "DefaultCompany", productName: "99Days", productVersion: "0.1"
+    };
+
+    const script = document.createElement("script");
+    script.src = buildUrl + "/Build.loader.js";
+    script.onload = async () => {
+        try {
+            const [dUrl, cUrl] = await Promise.all([fetchAndCombine(dataParts), fetchAndCombine(wasmParts)]);
+            config.dataUrl = dUrl;
+            config.codeUrl = cUrl;
+
+            createUnityInstance(document.querySelector("#unity-canvas"), config, (progress) => {
+                document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+            }).then((instance) => {
+                window.myGameInstance = instance;
+                document.querySelector("#loading-cover").style.display = "none";
+            });
+        } catch (e) { console.error("Critical Error:", e); }
+    };
+    document.body.appendChild(script);
+
+    window.addEventListener("unhandledrejection", function(event) { event.preventDefault(); });
+</script>
+
+</body>
+</html>
